@@ -91,6 +91,9 @@ NUMA Deck trabaja directamente sobre archivos abiertos y estándar para que tu c
 | **Matemáticas y código** | LaTeX (`KaTeX`) y bloques ```` ```lenguaje ```` | Renderizado offline de ecuaciones en línea (`$...$`) y en bloque (`$$...$$`) mediante KaTeX empaquetado localmente; resaltado de sintaxis con `Pygments`. |
 | **Enlaces e interactividad** | Web (`http/https`), archivos locales, enlaces entre slides | Permite saltar entre diapositivas internas mediante IDs persistentes, abrir archivos locales desde la presentación y abrir enlaces web con el navegador del sistema. |
 
+![Carga y visualización interactiva de imágenes en NUMA Deck](docs/screenshots/image-viewer.jpg)
+*Soporte y visor interactivo de imágenes: carga fotografías, diagramas o gráficos `.png`, `.jpg`, `.webp` y `.svg` directamente en tus diapositivas, y ábrelos en cualquier momento con zoom por rueda, desplazamiento por arrastre y rotación de 90° (`L` / `R`).*
+
 ---
 
 ## Onboarding para usuarios nuevos
