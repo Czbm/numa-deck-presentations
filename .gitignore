@@ -1,0 +1,31 @@
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Local workspace / drafts / temporary files
+DEV/
+tmp/
+*.log
+*.tmp
+*.bak
+*.session.json
+
+# OS / IDE artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

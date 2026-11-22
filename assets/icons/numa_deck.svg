@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <!-- Base NUMA Night Blue tile -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="#0E1324"/>
+  <rect x="24" y="24" width="464" height="464" rx="112" stroke="#2563FF" stroke-width="14"/>
+
+  <!-- Back stacked slide card (Mint accent) -->
+  <rect x="116" y="96" width="308" height="224" rx="34" fill="#2EE6C5" stroke="#0B0F1A" stroke-width="12"/>
+
+  <!-- Neobrutalist solid drop shadow for front slide -->
+  <rect x="96" y="156" width="320" height="236" rx="36" fill="#0B0F1A"/>
+
+  <!-- Front main slide card -->
+  <rect x="82" y="142" width="320" height="236" rx="36" fill="#FFFFFF" stroke="#0B0F1A" stroke-width="12"/>
+
+  <!-- Top Mango accent bar (slide heading) -->
+  <rect x="118" y="182" width="146" height="28" rx="14" fill="#FFB347"/>
+
+  <!-- Content lines -->
+  <rect x="118" y="232" width="176" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="118" y="266" width="132" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="118" y="300" width="96" height="18" rx="9" fill="#E2E8F0"/>
+
+  <!-- Electric Blue Play badge (Presentation CTA) -->
+  <circle cx="348" cy="322" r="64" fill="#0B0F1A"/>
+  <circle cx="340" cy="314" r="64" fill="#2563FF" stroke="#0B0F1A" stroke-width="12"/>
+  <path d="M322 284L374 314L322 344V284Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round"/>
+</svg>
