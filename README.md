@@ -11,7 +11,8 @@
 ![Interfaz](https://img.shields.io/badge/interfaz-PySide6%20%2B%20WebEngine-10b981?style=flat)
 ![Formatos](https://img.shields.io/badge/formatos-Markdown%20·%20KaTeX%20·%20PDF-6366f1?style=flat)
 <br />
-![Licencia](https://img.shields.io/badge/licencia-MIT-d97706?style=flat)
+![Licencia código](https://img.shields.io/badge/código-GPLv3-d97706?style=flat)
+![Licencia docs](https://img.shields.io/badge/docs%20%26%20assets-CC%20BY--SA%204.0-0ea5e9?style=flat)
 ![Contribuciones](https://img.shields.io/badge/contribuciones-bienvenidas-65a30d?style=flat)
 
 <br />
@@ -176,4 +177,8 @@ Subtítulo o nombre del expositor
 
 Las ideas, reportes de errores y mejoras son bienvenidos a través de *Issues* y *Pull Requests*.
 
-Este proyecto se distribuye bajo la licencia **MIT**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto utiliza un esquema de licenciamiento abierto con **copyleft (compartir igual)** para garantizar que el proyecto y sus derivados permanezcan abiertos para la comunidad:
+
+- **Código fuente (`*.py`, pruebas y configuración):** licenciado bajo **GNU General Public License v3.0 (GPLv3)**. Cualquier modificación o versión derivada que se distribuya debe mantenerse libre y bajo la misma licencia. Consulta [LICENSE](LICENSE).
+- **Documentación, guías, plantillas y recursos visuales propios (`README.md`, `docs/`, `assets/icons/`, `assets/esquemas/`):** licenciados bajo **Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)**. Consulta [LICENSE-DOCS](LICENSE-DOCS).
+- **Componentes de terceros:** conservan sus licencias originales (`assets/katex/` bajo MIT; `PySide6` bajo LGPLv3).
