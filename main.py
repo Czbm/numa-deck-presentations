@@ -1587,6 +1587,7 @@ class NumaDeckWindow(QMainWindow):
         self.preview.student_sync_label_activated.connect(self.open_teacher_slide_from_student_label)
         self.preview.zoom_changed.connect(lambda factor: self._on_preview_zoom_changed("student", factor))
         self.preview.slide_navigated_by_key.connect(self._center_editor_on_slide)
+        self.preview.paper_page_changed.connect(self._on_preview_paper_page_changed)
         self.preview.web_view.loadFinished.connect(self._restore_editor_focus_after_preview_load)
         self.preview.web_view.loadFinished.connect(
             lambda ok: self._center_active_cursor_after_preview_load(self.preview, ok)
@@ -5061,11 +5062,93 @@ class NumaDeckWindow(QMainWindow):
         except Exception:
             logging.exception("No se pudo centrar el editor en el slide")
 
+    def _center_editor_on_paper_page(self, page_info):
+        """Move and center the Markdown editor on the source line of the shown printed page."""
+        if not isinstance(page_info, dict):
+            return
+        try:
+            lines = self.editor.toPlainText().split("\n")
+            if not lines:
+                return
+            total_pages = max(1, int(page_info.get("total", 1) or 1))
+            page_index = max(0, min(int(page_info.get("page", 0) or 0), total_pages - 1))
+            slide_index = int(page_info.get("slideIndex", -1))
+            snippets = page_info.get("snippets") or []
+
+            def _normalize_md(text):
+                cleaned = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text or "")
+                cleaned = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", cleaned)
+                cleaned = re.sub(r"^\s*(?:#{1,6}\s+|[-*+]\s+|\d+\.\s+|>\s+)+", "", cleaned)
+                cleaned = re.sub(r"[*_`~]+", "", cleaned)
+                cleaned = re.sub(r"\s+", " ", cleaned).strip().casefold()
+                return cleaned
+
+            slide_start = None
+            slide_end = len(lines)
+            if slide_index >= 0:
+                slide_start = self._rendered_slide_start_line(lines, slide_index)
+                next_start = self._rendered_slide_start_line(lines, slide_index + 1)
+                if next_start is not None and (slide_start is None or next_start > slide_start):
+                    slide_end = next_start
+
+            def _find_matching_line(start_idx, end_idx):
+                for snippet in snippets:
+                    needle = _normalize_md(snippet)
+                    if len(needle) < 6:
+                        continue
+                    probe = needle[:60]
+                    short_probe = needle[:28]
+                    for line_idx in range(max(0, start_idx), min(len(lines), end_idx)):
+                        norm_line = _normalize_md(lines[line_idx])
+                        if not norm_line:
+                            continue
+                        if probe in norm_line or (len(norm_line) >= 10 and norm_line in needle):
+                            return line_idx
+                    for line_idx in range(max(0, start_idx), min(len(lines), end_idx)):
+                        norm_line = _normalize_md(lines[line_idx])
+                        if norm_line and short_probe in norm_line:
+                            return line_idx
+                return None
+
+            target_line = None
+            if slide_start is not None:
+                target_line = _find_matching_line(slide_start, slide_end)
+            if target_line is None:
+                target_line = _find_matching_line(0, len(lines))
+            if target_line is None and slide_start is not None:
+                target_line = slide_start
+            if target_line is None:
+                ratio = page_index / max(1, total_pages - 1)
+                target_line = int(round(ratio * max(0, len(lines) - 1)))
+
+            block = self.editor.document().findBlockByNumber(target_line)
+            if not block.isValid():
+                return
+            cursor = QTextCursor(block)
+            self.editor.blockSignals(True)
+            try:
+                self.editor.setTextCursor(cursor)
+            finally:
+                self.editor.blockSignals(False)
+            self.editor.centerCursor()
+            if hasattr(self, "cursor_label"):
+                self.cursor_label.setText(f"Ln {target_line + 1}, Col 1")
+            if slide_index >= 0 and self.nav_mode == "slides":
+                self._highlight_outline_slide(slide_index)
+        except Exception:
+            logging.exception("No se pudo centrar el editor en la hoja impresa")
+
     def _quick_next_slide(self):
+        if getattr(self.preview, "presentation_mode", "slide") == "paper":
+            self.preview.step_paper_page(1, self._center_editor_on_paper_page)
+            return
         self.preview.next_slide()
         self.preview.get_current_slide(self._after_presentation_navigation)
 
     def _quick_prev_slide(self):
+        if getattr(self.preview, "presentation_mode", "slide") == "paper":
+            self.preview.step_paper_page(-1, self._center_editor_on_paper_page)
+            return
         self.preview.prev_slide()
         self.preview.get_current_slide(self._after_presentation_navigation)
 
@@ -8042,9 +8125,34 @@ class NumaDeckWindow(QMainWindow):
         words = len(text.split()) if text else 0
         self.words_label.setText(f"{words} palabras")
 
+    def _on_preview_paper_page_changed(self, page_index, total_pages):
+        if getattr(self.preview, "presentation_mode", "slide") != "paper":
+            return
+        total = max(1, int(total_pages or 1))
+        page_number = max(1, min(int(page_index or 0) + 1, total))
+        if hasattr(self, "preview_slide_label"):
+            self.preview_slide_label.setText(f"Hoja {page_number}/{total}")
+        if hasattr(self, "preview_slide_counter_label"):
+            self.preview_slide_counter_label.setText(f"Hoja {page_number} / {total}")
+        if hasattr(self, "quick_prev_slide_btn"):
+            self.quick_prev_slide_btn.setToolTip("Ir a la hoja anterior")
+        if hasattr(self, "quick_next_slide_btn"):
+            self.quick_next_slide_btn.setToolTip("Pasar a la siguiente hoja")
+
     def _update_preview_slide_label(self, slide_index=None):
         if not hasattr(self, "preview_slide_label"):
             return
+        if getattr(self.preview, "presentation_mode", "slide") == "paper":
+            if hasattr(self, "quick_prev_slide_btn"):
+                self.quick_prev_slide_btn.setToolTip("Ir a la hoja anterior")
+            if hasattr(self, "quick_next_slide_btn"):
+                self.quick_next_slide_btn.setToolTip("Pasar a la siguiente hoja")
+            self.preview.get_paper_page_state()
+            return
+        if hasattr(self, "quick_prev_slide_btn"):
+            self.quick_prev_slide_btn.setToolTip("Ir a la diapositiva anterior")
+        if hasattr(self, "quick_next_slide_btn"):
+            self.quick_next_slide_btn.setToolTip("Pasar a la siguiente diapositiva")
         if slide_index is None:
             slide_index = self.editor.current_slide_index()
         try:

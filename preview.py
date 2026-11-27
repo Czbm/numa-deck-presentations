@@ -88,6 +88,7 @@ class PresentationView(QWidget):
     slide_navigated_by_key = Signal(int)
     student_sync_label_activated = Signal(int)
     markdown_file_dropped = Signal(str)
+    paper_page_changed = Signal(int, int)
     # Emitted after an interaction handled by the embedded presentation HTML.
     # Consumers can mirror its state without rebuilding the Markdown preview.
     interactive_state_changed = Signal()
@@ -656,6 +657,8 @@ class PresentationView(QWidget):
                 self._pending_paper_position = None
                 self._last_paper_position = position
                 QTimer.singleShot(100, lambda: self._restore_paper_position(position))
+            if self.presentation_mode == "paper":
+                QTimer.singleShot(160, self._emit_current_paper_page_state)
             self.apply_clock_settings()
             self.apply_student_sync_label()
             self.apply_teacher_marker()
@@ -1299,17 +1302,166 @@ class PresentationView(QWidget):
         self.set_borderless(not self.borderless)
         return self.borderless
 
-    # ── Slide navigation ──────────────────────────────────
+    # ── Slide & Paper page navigation ─────────────────────
+
+    def _emit_current_paper_page_state(self):
+        if self.presentation_mode == "paper" and self._loaded:
+            self.get_paper_page_state()
+
+    def get_paper_page_state(self, callback=None):
+        """Return and emit the currently visible printed page index and total pages."""
+        if self.presentation_mode != "paper" or not self._loaded:
+            if callback:
+                callback({"page": 0, "total": 0})
+            return
+        js = """
+        (function() {
+            const pages = Array.from(document.querySelectorAll('.print-page'));
+            const total = pages.length;
+            if (!total) return JSON.stringify({ page: 0, total: 0 });
+            const vh = window.innerHeight || document.documentElement.clientHeight || 1;
+            let bestIndex = 0;
+            let bestVisible = -1;
+            for (let i = 0; i < total; i += 1) {
+                const rect = pages[i].getBoundingClientRect();
+                const visible = Math.max(0, Math.min(rect.bottom, vh) - Math.max(rect.top, 0));
+                if (visible > bestVisible) {
+                    bestVisible = visible;
+                    bestIndex = i;
+                }
+            }
+            return JSON.stringify({ page: bestIndex, total: total });
+        })();
+        """
+
+        def capture(result):
+            try:
+                data = json.loads(result) if isinstance(result, str) else {}
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data = {}
+            total = max(0, int(data.get("total", 0) or 0))
+            page = max(0, min(int(data.get("page", 0) or 0), max(0, total - 1)))
+            if total > 0:
+                self._last_paper_position = {
+                    "page": page,
+                    "offset": float((self._last_paper_position or {}).get("offset", 0.0)),
+                }
+                self.paper_page_changed.emit(page, total)
+            if callback:
+                callback({"page": page, "total": total})
+
+        self.web_view.page().runJavaScript(js, capture)
+
+    def step_paper_page(self, delta, callback=None):
+        """Scroll to the previous (-1) or next (+1) printed sheet in paper mode."""
+        if self.presentation_mode != "paper" or not self._loaded:
+            if callback:
+                callback({"page": 0, "total": 0})
+            return
+        try:
+            step = int(delta)
+        except (TypeError, ValueError):
+            step = 0
+        js = f"""
+        (function() {{
+            const pages = Array.from(document.querySelectorAll('.print-page'));
+            const total = pages.length;
+            if (!total) return JSON.stringify({{ page: 0, total: 0 }});
+            const vh = window.innerHeight || document.documentElement.clientHeight || 1;
+            const currentScroll = window.scrollY || document.documentElement.scrollTop || 0;
+            let currentIndex = 0;
+            if (
+                typeof window.__numaPaperPageIndex === 'number' &&
+                typeof window.__numaPaperScrollY === 'number' &&
+                Math.abs(currentScroll - window.__numaPaperScrollY) <= 6
+            ) {{
+                currentIndex = Math.max(0, Math.min(total - 1, window.__numaPaperPageIndex));
+            }} else {{
+                let bestVisible = -1;
+                for (let i = 0; i < total; i += 1) {{
+                    const rect = pages[i].getBoundingClientRect();
+                    const visible = Math.max(0, Math.min(rect.bottom, vh) - Math.max(rect.top, 0));
+                    if (visible > bestVisible) {{
+                        bestVisible = visible;
+                        currentIndex = i;
+                    }}
+                }}
+            }}
+            const targetIndex = Math.max(0, Math.min(total - 1, currentIndex + ({step})));
+            const target = pages[targetIndex];
+            let slideIndex = -1;
+            const snippets = [];
+            if (target) {{
+                const rect = target.getBoundingClientRect();
+                const targetTop = Math.max(0, currentScroll + rect.top - 12);
+                window.scrollTo(0, targetTop);
+                window.__numaPaperPageIndex = targetIndex;
+                window.__numaPaperScrollY = window.scrollY || document.documentElement.scrollTop || targetTop;
+                const rawSlide = target.getAttribute('data-source-slide-index') || target.getAttribute('data-slide-index');
+                if (rawSlide !== null && rawSlide !== '') {{
+                    const parsedSlide = parseInt(rawSlide, 10);
+                    if (!Number.isNaN(parsedSlide)) slideIndex = parsedSlide;
+                }}
+                const bodyRoot = target.querySelector('.print-page-content') || target;
+                const blocks = bodyRoot.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, td, th, pre, figcaption');
+                for (const el of blocks) {{
+                    const txt = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+                    if (txt.length >= 6) {{
+                        snippets.push(txt.slice(0, 120));
+                        if (snippets.length >= 4) break;
+                    }}
+                }}
+                if (!snippets.length) {{
+                    const img = bodyRoot.querySelector('img[alt]');
+                    if (img && img.alt && img.alt.trim()) {{
+                        snippets.push(img.alt.trim().slice(0, 120));
+                    }}
+                }}
+            }}
+            return JSON.stringify({{ page: targetIndex, total: total, slideIndex: slideIndex, snippets: snippets }});
+        }})();
+        """
+
+        def capture(result):
+            try:
+                data = json.loads(result) if isinstance(result, str) else {}
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data = {}
+            total = max(0, int(data.get("total", 0) or 0))
+            page = max(0, min(int(data.get("page", 0) or 0), max(0, total - 1)))
+            raw_slide = data.get("slideIndex", -1)
+            try:
+                slide_index = int(raw_slide)
+            except (TypeError, ValueError):
+                slide_index = -1
+            raw_snippets = data.get("snippets")
+            snippets = [str(s) for s in raw_snippets if isinstance(s, str) and s.strip()] if isinstance(raw_snippets, list) else []
+            if total > 0:
+                self._last_paper_position = {"page": page, "offset": 0.0}
+                self.paper_page_changed.emit(page, total)
+            if callback:
+                callback({
+                    "page": page,
+                    "total": total,
+                    "slideIndex": slide_index,
+                    "snippets": snippets,
+                })
+
+        self.web_view.page().runJavaScript(js, capture)
 
     def next_slide(self):
         if self.presentation_mode == "slide":
             self._last_known_slide_index += 1
             self._inject_js("window.nextSlide();")
+        elif self.presentation_mode == "paper":
+            self.step_paper_page(1)
 
     def prev_slide(self):
         if self.presentation_mode == "slide":
             self._last_known_slide_index = max(0, self._last_known_slide_index - 1)
             self._inject_js("window.prevSlide();")
+        elif self.presentation_mode == "paper":
+            self.step_paper_page(-1)
 
     def goto_slide(self, index):
         try:
